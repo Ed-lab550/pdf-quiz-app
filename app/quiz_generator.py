@@ -25,7 +25,7 @@ from google.genai import types
 # Free-tier eligible model as of 2026. If you later move to a paid
 # project, you can swap this for "gemini-2.5-pro" without changing
 # anything else in this file.
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.0-flash"
 
 _client: Optional[genai.Client] = None
 
