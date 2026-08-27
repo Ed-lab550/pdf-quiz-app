@@ -24,7 +24,7 @@ from groq import Groq
 
 # Free-tier model on Groq as of 2026. Fast, high daily quota, good enough
 # for grounded MCQ generation from short passages.
-GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_MODEL = "openai/gpt-oss-120b"
 
 _client: Optional[Groq] = None
 
