@@ -1,8 +1,9 @@
 """
 Step 3 & 4: Turn chunks into quiz questions.
 
-Uses Google's Gemini API (free tier: Flash / Flash-Lite models) instead
-of a paid-only provider. Swap GEMINI_MODEL below if you later upgrade.
+Uses Groq's API (free tier, high daily request limits, OpenAI-compatible
+client) instead of Gemini. Groq hosts open models like Llama; we use
+llama-3.3-70b-versatile which is strong enough for grounded MCQ writing.
 
 Two distinct paths, matching the product decision:
   - generate_from_chunk(): for typed_notes / scanned content.
@@ -19,26 +20,24 @@ import json
 import os
 from typing import List, Optional
 
-from google import genai
-from google.genai import types
+from groq import Groq
 
-# Free-tier eligible model as of 2026. If you later move to a paid
-# project, you can swap this for "gemini-2.5-pro" without changing
-# anything else in this file.
-GEMINI_MODEL = "gemini-flash-latest"
+# Free-tier model on Groq as of 2026. Fast, high daily quota, good enough
+# for grounded MCQ generation from short passages.
+GROQ_MODEL = "llama-3.3-70b-versatile"
 
-_client: Optional[genai.Client] = None
+_client: Optional[Groq] = None
 
 
-def get_client() -> genai.Client:
+def get_client() -> Groq:
     global _client
     if _client is None:
-        api_key = os.environ.get("GEMINI_API_KEY")
+        api_key = os.environ.get("GROQ_API_KEY")
         if not api_key:
             raise RuntimeError(
-                "GEMINI_API_KEY is not set. Export it before starting the server."
+                "GROQ_API_KEY is not set. Export it before starting the server."
             )
-        _client = genai.Client(api_key=api_key)
+        _client = Groq(api_key=api_key)
     return _client
 
 
@@ -87,18 +86,18 @@ Rules you must follow strictly:
 """
 
 
-def _call_gemini(system_prompt: str, user_content: str) -> dict:
+def _call_groq(system_prompt: str, user_content: str) -> dict:
     client = get_client()
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=user_content,
-        config=types.GenerateContentConfig(
-            system_instruction=system_prompt,
-            response_mime_type="application/json",
-            temperature=0.4,
-        ),
+    response = client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ],
+        temperature=0.4,
+        response_format={"type": "json_object"},
     )
-    raw_text = (response.text or "").strip()
+    raw_text = (response.choices[0].message.content or "").strip()
 
     # Defensive cleanup in case the model wraps output in fences anyway.
     if raw_text.startswith("```"):
@@ -128,11 +127,11 @@ def generate_from_chunk(
         f"Follow all system rules exactly.\n\n"
         f"PASSAGE:\n{chunk_text}"
     )
-    data = _call_gemini(GENERATE_SYSTEM_PROMPT, user_content)
+    data = _call_groq(GENERATE_SYSTEM_PROMPT, user_content)
     return data.get("questions", [])
 
 
 def extract_from_past_questions(section_text: str) -> List[dict]:
     user_content = f"Extract all valid 4-option MCQs from this past questions text:\n\n{section_text}"
-    data = _call_gemini(EXTRACT_SYSTEM_PROMPT, user_content)
+    data = _call_groq(EXTRACT_SYSTEM_PROMPT, user_content)
     return data.get("questions", [])
